@@ -89,12 +89,12 @@ The system can answer the following types of questions:
 ```mermaid
 flowchart TD
   A[Client]
-  B[POST /api/ask <br> { "question": "..." }]
-  C[Next.js API Route <br> /api/ask]
-  D[Question Parser <br> (Regex Pattern Match)]
-  E[Message Service <br> (Cache + External API)]
-  F[Answer Generator <br> (Context Analysis)]
-  G[JSON Response <br> { "answer": "..." }]
+  B[POST /api/ask]
+  C[Next.js API Route]
+  D[Question Parser]
+  E[Message Service]
+  F[Answer Generator]
+  G[JSON Response]
 
   A --> B --> C --> D --> E --> F --> G
 ```
