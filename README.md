@@ -1,6 +1,148 @@
-# Aurora-Applied-AI-ML-Assessment
+# Aurora — QA System (Applied AI / ML Assessment)
 
-Create: aurora-qa-system/README.md
+A minimal, TypeScript + Next.js project that exposes a small question-answering API for member messages.
+The runnable app lives under `aurora-qa-system/` and implements a pattern-based QA endpoint that fetches and caches
+messages from an external API and answers simple natural-language questions about users (e.g. "When is Layla
+planning her trip to London?").
+
+This README gives a concise overview, quick start, and troubleshooting tips (including the common "Cannot find module
+ '@/lib/config'" TypeScript alias issue).
+
+## Quick summary
+
+- Stack: Next.js (App Router), TypeScript, Axios
+- Main feature: POST /api/ask — send a natural-language question and receive a short answer derived from cached
+  member messages
+- Code location: `aurora-qa-system/` (this is the working Next app)
+
+## Short setup & run (local)
+
+Prerequisites
+- Node.js 18+ (or a compatible 18+ runtime)
+- npm, yarn, or pnpm
+
+Steps
+
+1. Open terminal and change to the app folder:
+
+```bash
+cd aurora-qa-system
+```
+
+2. Install dependencies:
+
+```bash
+npm install
+# or: yarn install
+# or: pnpm install
+```
+
+3. Create a `.env.local` file in `aurora-qa-system/` with at minimum:
+
+```env
+EXTERNAL_API_BASE_URL=https://november7-730026606190.europe-west1.run.app
+EXTERNAL_API_TIMEOUT=30000
+```
+
+4. Start the dev server:
+
+```bash
+npm run dev
+```
+
+5. The app will be available at http://localhost:3000. The QA API endpoint is at
+   `http://localhost:3000/api/ask`.
+
+## API: Usage examples
+
+POST /api/ask
+
+Request body (JSON):
+
+```json
+{ "question": "When is Layla planning her trip to London?" }
+```
+
+Curl example:
+
+```bash
+curl -X POST http://localhost:3000/api/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question":"When is Layla planning her trip to London?"}'
+```
+
+Successful response (200):
+
+```json
+{ "answer": "Layla is planning a trip to London on ..." }
+```
+
+If the request body is invalid the API returns a helpful 4xx payload with `error` and `details` fields.
+
+## Project layout (important files)
+
+- `aurora-qa-system/` — Next.js app root
+  - `src/app/api/ask/route.ts` — main API route, question parsing and answer logic
+  - `src/services/messages.service.ts` — external API fetching, pagination handling, in-memory cache
+  - `src/lib/config.ts` — loads `EXTERNAL_API_*` environment variables
+  - `src/types/api.types.ts` — TypeScript definitions used by the API and services
+  - `package.json`, `tsconfig.json`, `next.config.ts`
+
+## Important implementation notes
+
+- Message fetching uses an in-memory cache (in `messages.service.ts`) and will fetch messages in pages of 50
+  until the API indicates no more results or a pagination limit is reached. The code treats 4xx errors during
+  pagination as a stop condition and returns whatever was fetched.
+- Question parsing uses simple regex patterns (see `route.ts`). That means the API answers a limited set of
+  question patterns (when-trip, how-many, what-favorite, what-prefer). For broader NL understanding, integrate an
+  LLM or a dedicated NLP pipeline.
+
+## Troubleshooting: "Cannot find module '@/lib/config'" or missing type declarations
+
+This repository uses the `@/*` path alias mapped to `./src/*` via `tsconfig.json`:
+
+```jsonc
+"paths": { "@/*": ["./src/*"] }
+```
+
+How to resolve common errors:
+
+- Editor / TypeScript server
+  - Restart your editor/TypeScript language server after changing `tsconfig.json`.
+  - Ensure your editor is using the workspace TypeScript version (some editors use the global TypeScript by default).
+
+- Running Node scripts directly (outside Next.js)
+  - Node doesn't honor TypeScript `paths` at runtime. If you run TS directly (e.g. with `ts-node`), use `tsconfig-paths`
+    or run code through Next.js (`npm run dev`) which resolves aliases for the build/runtime.
+
+- Build/CI
+  - Next.js respects `tsconfig` paths. If a CI step or test runner can't resolve aliases, configure the runner to use
+    the same tsconfig or add a small build step that compiles via `next build` / TypeScript compiler.
+
+- Quick workaround (if you just want a fast fix): replace `@/lib/config` imports with relative imports such as
+  `../../lib/config` in the file that's failing. This removes the alias from the equation but is less ergonomic.
+
+## Suggestions & next steps
+
+- Add unit and integration tests for parser logic and the message service (mock the external API). A small test
+  harness with Jest/Vitest would be helpful.
+- Add a persistent cache (Redis) if you plan to scale beyond single-process deployments.
+- Consider an LLM integration (OpenAI, local LLM) for more flexible question understanding and better fallback
+  answers.
+
+## Contact / Author
+
+Author: Ashish Parulekar
+
+---
+
+If you'd like, I can also:
+- Add a short `CONTRIBUTING.md` and `ENVIRONMENT.md` for clarity
+- Create a tiny test that verifies `POST /api/ask` returns 400 when `question` is missing
+- Or switch some imports from alias to relative paths to eliminate the module-not-found issue in Node scripts
+
+Tell me which of the above you'd like next.
+
 
 # Aurora QA System
 
