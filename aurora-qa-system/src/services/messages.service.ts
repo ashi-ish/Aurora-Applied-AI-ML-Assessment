@@ -46,53 +46,54 @@ class MessagesCache {
 const cache = new MessagesCache();
 
 async function fetchMessages(
-  params: MessageQueryParams = {}
+  params: MessageQueryParams = {},
+  retries: number = 3
 ): Promise<MessagesResponse> {
-  const { skip = 0, limit = 100 } = params;
-
+  const { skip = 0, limit = 50 } = params;
   const url = `${config.api.baseUrl}/messages/`;
 
-  // Debug logging
-  console.log("Fetching from URL:", url);
-  console.log("With params:", { skip, limit });
-  console.log("Full URL would be:", `${url}?skip=${skip}&limit=${limit}`);
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const response = await axios.get<MessagesResponse>(url, {
+        params: { skip, limit },
+        timeout: config.api.timeout,
+        headers: {
+          Accept: "application/json",
+        },
+      });
 
-  try {
-    const response = await axios.get<MessagesResponse>(url, {
-      params: { skip, limit },
-      timeout: config.api.timeout,
-      headers: {
-        Accept: "application/json",
-      },
-    });
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const axiosError = error as AxiosError;
+        const isTimeout = axiosError.code === "ECONNABORTED";
+        const status = axiosError.response?.status;
 
-    console.log(
-      "Success! Got response with",
-      response.data.items?.length,
-      "items"
-    );
-    return response.data;
-  } catch (error) {
-    // Enhanced error logging
-    if (axios.isAxiosError(error)) {
-      const axiosError = error as AxiosError;
-      console.error("API Error Details:");
-      console.error("- Status:", axiosError.response?.status);
-      console.error("- Status Text:", axiosError.response?.statusText);
-      console.error("- Response Data:", axiosError.response?.data);
-      console.error("- Request URL:", axiosError.config?.url);
-      console.error("- Request Params:", axiosError.config?.params);
+        // Retry on timeout
+        if (isTimeout && attempt < retries) {
+          console.log(`Request timeout, retrying (${attempt}/${retries})...`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          continue;
+        }
 
-      throw new Error(
-        `Failed to fetch messages: ${axiosError.message} (Status: ${axiosError.response?.status})`
-      );
+        // Log error for debugging
+        console.error(`API Error: ${axiosError.message} (Status: ${status})`);
+
+        throw new Error(
+          `Failed to fetch messages: ${axiosError.message} (Status: ${
+            status || "timeout"
+          })`
+        );
+      }
+
+      throw new Error("An unexpected error occurred while fetching messages");
     }
-    throw new Error("An unexpected error occurred while fetching messages");
   }
+
+  throw new Error("Failed after all retry attempts");
 }
 
 export async function fetchAllMessages(): Promise<Message[]> {
-  // Prevent concurrent fetches
   if (cache.isFetchingData()) {
     throw new Error("Already fetching messages");
   }
@@ -102,21 +103,80 @@ export async function fetchAllMessages(): Promise<Message[]> {
   try {
     const allMessages: Message[] = [];
     let skip = 0;
-    const limit = 100; // Fetch in batches of 100
+    const limit = 50;
+    let hasMore = true;
 
-    // First request to get total count
-    const firstBatch = await fetchMessages({ skip, limit });
-    allMessages.push(...firstBatch.items);
+    console.log("Fetching messages from external API...");
 
-    const totalMessages = firstBatch.total;
-    skip += limit;
+    while (hasMore) {
+      try {
+        const batch = await fetchMessages({ skip, limit });
 
-    // Fetch remaining messages
-    while (skip < totalMessages) {
-      const batch = await fetchMessages({ skip, limit });
-      allMessages.push(...batch.items);
-      skip += limit;
+        if (batch.items && batch.items.length > 0) {
+          allMessages.push(...batch.items);
+
+          if (batch.items.length < limit) {
+            hasMore = false;
+          } else {
+            skip += limit;
+          }
+        } else {
+          hasMore = false;
+        }
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          const status = error.response?.status;
+
+          // If first request failed, that's a real problem
+          if (allMessages.length === 0 && skip === 0) {
+            console.error("Failed to fetch initial batch from API");
+            throw new Error(
+              `Cannot fetch messages from API. Status: ${status || "unknown"}`
+            );
+          }
+
+          // Any 4xx error during pagination = stop and use what we have
+          if (status && status >= 400 && status < 500) {
+            console.log(
+              `API pagination limit reached. Cached ${allMessages.length} messages.`
+            );
+            hasMore = false;
+          } else if (status && status >= 500) {
+            // 5xx server error
+            if (allMessages.length > 0) {
+              console.log(
+                `Server error, using ${allMessages.length} cached messages.`
+              );
+              hasMore = false;
+            } else {
+              throw error;
+            }
+          } else {
+            // Network error or timeout
+            if (allMessages.length > 0) {
+              console.log(
+                `Network error, using ${allMessages.length} cached messages.`
+              );
+              hasMore = false;
+            } else {
+              throw error;
+            }
+          }
+        } else {
+          // Non-axios error
+          if (allMessages.length > 0) {
+            console.log(
+              `Error occurred, using ${allMessages.length} cached messages.`
+            );
+            hasMore = false;
+          } else {
+            throw error;
+          }
+        }
+      }
     }
+
+    console.log(`Successfully cached ${allMessages.length} messages.`);
 
     cache.setMessages(allMessages);
     return allMessages;

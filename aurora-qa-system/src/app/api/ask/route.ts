@@ -32,7 +32,7 @@ function parseQuestion(question: string): {
     return {
       type: "when_trip",
       userName: match[1].trim(),
-      context: match[2].trim(), // location
+      context: match[2].trim(),
     };
   }
 
@@ -40,7 +40,7 @@ function parseQuestion(question: string): {
   if (match) {
     return {
       type: "how_many",
-      searchTerm: match[1].trim(), // thing (e.g., "cars")
+      searchTerm: match[1].trim(),
       userName: match[2].trim(),
     };
   }
@@ -50,7 +50,7 @@ function parseQuestion(question: string): {
     return {
       type: "what_favorite",
       userName: match[1].trim(),
-      searchTerm: match[2].trim(), // thing (e.g., "restaurants")
+      searchTerm: match[2].trim(),
     };
   }
 
@@ -80,7 +80,6 @@ function answerQuestion(
 ): string {
   const { type, userName, context, searchTerm } = parsedQuestion;
 
-  // Get messages for the specific user
   let userMessages: Message[] = [];
   if (userName) {
     userMessages = getMessagesByUserName(userName);
@@ -121,7 +120,6 @@ function answerQuestion(
     }
 
     case "how_many": {
-      // Count mentions of the item
       const relevantMessages = userMessages.filter((msg) =>
         msg.message.toLowerCase().includes(searchTerm!.toLowerCase())
       );
@@ -130,7 +128,6 @@ function answerQuestion(
         return `I couldn't find any information about ${searchTerm} for ${userName}.`;
       }
 
-      // Try to extract numbers from messages
       const numberPattern =
         /\b(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\b/gi;
       const numbers: number[] = [];
@@ -143,7 +140,6 @@ function answerQuestion(
             if (!isNaN(num)) {
               numbers.push(num);
             } else {
-              // Convert word to number
               const wordMap: Record<string, number> = {
                 one: 1,
                 two: 2,
@@ -164,7 +160,6 @@ function answerQuestion(
       });
 
       if (numbers.length > 0) {
-        // Return the most common or largest number
         const count = Math.max(...numbers);
         return `${userName} has ${count} ${searchTerm}.`;
       }
@@ -174,7 +169,6 @@ function answerQuestion(
     }
 
     case "what_favorite": {
-      // Search for favorite/preference mentions
       const favoriteMessages = userMessages.filter((msg) => {
         const msgLower = msg.message.toLowerCase();
         return (
@@ -190,10 +184,8 @@ function answerQuestion(
         return `I couldn't find any information about ${userName}'s favorite ${searchTerm}.`;
       }
 
-      // Extract the specific favorites from messages
       const details = favoriteMessages.map((msg) => msg.message).join(" ");
 
-      // Try to extract restaurant/place names (capitalized words)
       const namePattern = /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g;
       const names = details.match(namePattern);
 
@@ -213,7 +205,6 @@ function answerQuestion(
     }
 
     case "what_prefer": {
-      // Search for preference messages
       const preferMessages = userMessages.filter(
         (msg) =>
           msg.message.toLowerCase().includes("prefer") ||
@@ -259,9 +250,7 @@ export async function POST(request: NextRequest) {
     }
 
     const messages = await getAllMessages();
-
     const parsedQuestion = parseQuestion(question);
-
     const answer = answerQuestion(parsedQuestion, messages);
 
     const response: AskResponse = { answer };

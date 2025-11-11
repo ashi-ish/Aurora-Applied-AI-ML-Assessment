@@ -14,8 +14,8 @@ function loadConfig(): Config {
 
   return {
     api: {
-      baseUrl,
-      timeout: timeout ? parseInt(timeout, 10) : 5000,
+      baseUrl: baseUrl.trim(),
+      timeout: timeout ? parseInt(timeout, 10) : 30000,
     },
   };
 }
