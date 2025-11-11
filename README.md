@@ -83,70 +83,53 @@ The system can answer the following types of questions:
 - "What are Sophia's favorite restaurants?"
 - "What does Fatima prefer?"
 
+
 ## 🏗️ Architecture
 
-┌─────────────┐
-│ Client │
-└──────┬──────┘
-│ POST /api/ask
-│ { "question": "..." }
-▼
-┌─────────────────────────┐
-│ Next.js API Route │
-│ (/api/ask) │
-└──────┬──────────────────┘
-│
-▼
-┌─────────────────────────┐
-│ Question Parser │
-│ (Regex Pattern Match) │
-└──────┬──────────────────┘
-│
-▼
-┌─────────────────────────┐
-│ Message Service │
-│ (Cache + External API) │
-└──────┬──────────────────┘
-│
-▼
-┌─────────────────────────┐
-│ Answer Generator │
-│ (Context Analysis) │
-└──────┬──────────────────┘
-│
-▼
-┌─────────────────────────┐
-│ JSON Response │
-│ { "answer": "..." } │
-└─────────────────────────┘
+```mermaid
+flowchart TD
+  A[Client]
+  B[POST /api/ask <br> { "question": "..." }]
+  C[Next.js API Route <br> /api/ask]
+  D[Question Parser <br> (Regex Pattern Match)]
+  E[Message Service <br> (Cache + External API)]
+  F[Answer Generator <br> (Context Analysis)]
+  G[JSON Response <br> { "answer": "..." }]
+
+  A --> B --> C --> D --> E --> F --> G
+```
 
 ## 🛠️ Technology Stack
 
-- **Language**: TypeScript 5.x
-- **Framework**: Next.js 16.0.1 (App Router)
-- **Runtime**: Node.js
-- **HTTP Client**: Axios 1.13.2
-- **External API**: Member Messages API
+| Component      | Details                        |
+|---------------|-------------------------------|
+| Language      | TypeScript 5.x                 |
+| Framework     | Next.js 16.0.1 (App Router)    |
+| Runtime       | Node.js                        |
+| HTTP Client   | Axios 1.13.2                   |
+| External API  | Member Messages API            |
 
 ## 📁 Project Structure
 
+```text
 aurora-qa-system/
 ├── src/
-│ ├── app/
-│ │ └── api/
-│ │ └── ask/
-│ │ └── route.ts # Main API endpoint
-│ ├── lib/
-│ │ └── config.ts # Configuration management
-│ ├── services/
-│ │ └── messages.service.ts # Data fetching & caching
-│ ├── types/
-│ │ └── api.types.ts # TypeScript type definitions
-│ └── utils/ # Utility functions (future)
-├── .env.local # Environment variables (not in repo)
+│   ├── app/
+│   │   └── api/
+│   │       └── ask/
+│   │           └── route.ts         # Main API endpoint
+│   ├── lib/
+│   │   └── config.ts                # Configuration management
+│   ├── services/
+│   │   └── messages.service.ts      # Data fetching & caching
+│   ├── types/
+│   │   └── api.types.ts             # TypeScript type definitions
+│   └── utils/                       # Utility functions (future)
+├── .env.local                       # Environment variables (not in repo)
 ├── package.json
 ├── tsconfig.json
 └── README.md
+```
 
 ## 🔧 Setup Instructions
 
