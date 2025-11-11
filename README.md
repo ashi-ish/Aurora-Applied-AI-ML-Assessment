@@ -230,6 +230,285 @@ Implemented Solutions
 - Rate limiting for public API
 - Unit and integration tests
 
+  ***
+
+  📝 BONUS 1: Design Notes - Alternative Approaches
+
+  ***
+
+  ## 🎨 BONUS 1: Design Notes - Alternative Approaches
+
+  During the development of this QA system, several alternative approaches were considered. Below is an analysis of each
+  approach with its trade-offs.
+
+  ### Approach 1: OpenAI GPT Integration
+
+  **Description**: Use OpenAI's GPT models to understand questions and generate answers from context.
+
+  **Implementation Example**:
+
+  ```typescript
+  const completion = await openai.chat.completions.create({
+    model: "gpt-3.5-turbo",
+    messages: [
+      { role: "system", content: "You are a QA assistant..." },
+      { role: "user", content: question },
+    ],
+    context: JSON.stringify(messages)
+  });
+
+  Pros:
+  - ✅ Handles natural language variations
+  - ✅ Understands context better
+  - ✅ Handles typos and rephrasing
+  - ✅ Can answer complex questions
+  - ✅ Continuously improving models
+
+  Cons:
+  - ❌ External API dependency (cost + latency)
+  - ❌ Non-deterministic responses
+  - ❌ Requires API key management
+  - ❌ Slower response times (~1-3s per request)
+  - ❌ Monthly costs based on usage
+
+  When to Use: Production system with budget, handling complex/varied questions, need for conversational interface.
+
+  ---
+  Approach 2: Fine-Tuned Model
+
+  Description: Train a custom model specifically for this dataset and question types.
+
+  Implementation:
+  // Fine-tune GPT-3.5 on question-answer pairs
+  const fineTune = await openai.fineTuning.jobs.create({
+    training_file: "file-abc123",
+    model: "gpt-3.5-turbo"
+  });
+
+  // Use fine-tuned model
+  const response = await openai.chat.completions.create({
+    model: fineTune.fine_tuned_model,
+    messages: [{ role: "user", content: question }]
+  });
+
+  Pros:
+  - ✅ Optimized for specific use case
+  - ✅ Better accuracy than generic models
+  - ✅ Lower latency
+  - ✅ Potentially lower cost per query
+
+  Cons:
+  - ❌ Requires labeled training data
+  - ❌ Time-intensive setup
+  - ❌ Needs retraining for new patterns
+  - ❌ Upfront cost
+
+  When to Use: High-volume production systems with consistent question patterns and available training data.
+  ```
+
+---
+
+## 📊 BONUS 2: Data Analysis - Anomalies & Inconsistencies
+
+---
+
+## 🔍 BONUS 2: Data Analysis - Anomalies & Inconsistencies
+
+After analyzing the member messages dataset (650 messages cached), several interesting patterns, anomalies, and
+inconsistencies were discovered.
+
+### Dataset Overview
+
+- **Total Messages**: 3,349 (per API response)
+- **Messages Cached**: 650 (due to API pagination limits)
+- **Unique Users**: ~12-15 distinct members
+- **Date Range**: 2024-11-14 to 2025-11-04
+- **Message Types**: Requests, preferences, feedback, updates
+
+---
+
+### 🚨 Anomaly 1: Future Timestamps
+
+**Finding**: Many messages have timestamps in the **future** (2025 dates).
+
+**Examples**:
+
+```json
+{
+  "timestamp": "2025-05-05T07:47:20.159073+00:00",
+  "message": "Please book a private jet to Paris for this Friday."
+}
+
+{
+  "timestamp": "2025-10-07T14:13:39.159309+00:00",
+  "message": "The concert tickets I received were perfect..."
+}
+
+Analysis:
+- Current date: 2024-11-10
+- Many messages dated: 2025-01-XX to 2025-11-XX
+- This is likely synthetic/test data
+
+Impact on QA System:
+- ⚠️ Trip planning questions may return confusing dates
+- ⚠️ "When" questions need temporal context awareness
+- ⚠️ Date validation/normalization may be needed
+
+Recommendation:
+- Add date normalization layer
+- Handle relative dates ("this Friday" vs absolute dates)
+- Consider message timestamp vs mentioned dates separately
+
+---
+🚨 Anomaly 2: Inconsistent Pagination Behavior
+
+Finding: API returns different HTTP error codes for pagination limits.
+
+Observed Behavior:
+Skip 0-600:    200 OK ✅
+Skip 650:      405 Method Not Allowed ❌
+Skip 700:      401 Unauthorized ❌
+Skip 850:      402 Payment Required ❌
+Skip 1000:     404 Not Found ❌
+
+Analysis:
+- Error codes appear random after ~600-650 messages
+- Should be consistent (e.g., always 429 Rate Limit)
+- Indicates possible API testing/mocking layer
+
+Impact on QA System:
+- ⚠️ Cannot rely on specific error codes
+- ⚠️ Must handle all 4xx errors as pagination limits
+
+Implementation:
+// Our solution: Treat all 4xx as pagination limit
+if (status && status >= 400 && status < 500) {
+  console.log(`API pagination limit. Using ${allMessages.length} messages.`);
+  hasMore = false;
+}
+
+---
+🚨 Anomaly 3: Ambiguous User Information
+
+Finding: Questions reference users that may not exist or are ambiguous.
+
+Example from Requirements:
+- Question: "What are Amira's favorite restaurants?"
+- Dataset: Contains "Amina Van Den Berg" but no "Amira"
+
+Analysis:
+// Users in dataset (partial list):
+- Sophia Al-Farsi
+- Fatima El-Tahir
+- Armand Dupont
+- Hans Müller
+- Layla Kawaguchi
+- Vikram Desai
+- Lily O'Sullivan
+- Lorenzo Cavalli
+- Amina Van Den Berg  // ← Close to "Amira"
+- Thiago Monteiro
+
+Impact:
+- User may have made typo in example question
+- OR "Amira" might exist in messages beyond cached 650
+- Fuzzy matching could help (Levenshtein distance)
+
+Recommendation:
+// Implement fuzzy name matching
+function findSimilarNames(query: string, threshold: number = 0.8): string[] {
+  return allUsers.filter(name =>
+    similarity(name, query) >= threshold
+  );
+}
+
+// Suggest corrections
+if (userMessages.length === 0) {
+  const suggestions = findSimilarNames(userName);
+  return `Did you mean: ${suggestions.join(', ')}?`;
+}
+
+---
+🚨 Anomaly 4: Vague Quantity References
+
+Finding: "How many X" questions are difficult to answer accurately.
+
+Example Question: "How many cars does Vikram Desai have?"
+
+Dataset Search Results:
+// Searching for "Vikram" + "car" in messages:
+// ❌ No explicit mentions found
+
+// Vikram's messages include:
+- "Thanks for arranging the last-minute trip to Tokyo..."
+- "The car service was impeccable..."  // ← Mentions "car" but not ownership
+- "Arrange a Gulfstream for a quick trip to Dubai..."
+- "Reserve a table at The Ivy for dinner tomorrow."
+
+Analysis:
+- Messages mention using services, not ownership
+- "car service" ≠ "owns a car"
+- Without explicit ownership statements, counts are unreliable
+
+Impact on Accuracy:
+- ⚠️ System may give incorrect counts
+- ⚠️ Or fail to find any count (current behavior)
+
+Current Implementation:
+// Extracts numbers but doesn't validate context
+if (numbers.length > 0) {
+  const count = Math.max(...numbers);
+  return `${userName} has ${count} ${searchTerm}.`;
+}
+
+return `I found mentions of ${searchTerm} but couldn't determine count.`;
+
+Recommendation:
+- Add context validation (ownership vs usage)
+- Use more sophisticated entity-relationship extraction
+- Be explicit about uncertainty in responses
+
+---
+🚨 Anomaly 5: Duplicate/Similar Messages
+
+Finding: Multiple users have nearly identical preference messages.
+
+Examples:
+// Fatima El-Tahir
+{ "message": "Please note I have a smoking preference for hotel rooms." }
+
+// Multiple users
+{ "message": "I prefer sea view rooms at coastal destinations." }
+{ "message": "Remember that I have a preference for quiet hotel rooms." }
+
+Analysis:
+- Suggests templated/synthetic data generation
+- Real-world data would have more variation
+- Some patterns repeat across users
+
+Impact:
+- ✅ Actually helps pattern matching work better
+- ⚠️ May not reflect real-world complexity
+
+---
+🚨 Anomaly 6: Microsecond Precision in Timestamps
+
+Finding: Timestamps have unrealistic microsecond precision.
+
+Examples:
+2025-05-05T07:47:20.159073+00:00
+2024-11-14T20:03:44.159235+00:00
+2025-03-09T02:25:23.159256+00:00
+
+Analysis:
+- Sequential microsecond increments (159073, 159235, 159256...)
+- Suggests batch data generation
+- Real messages would have irregular gaps
+
+Impact:
+- ✅ No impact on QA functionality
+- 📊 Useful insight about data source
+
 🤝 Contributing
 
 This is an assessment project. Contributions are not currently accepted.
