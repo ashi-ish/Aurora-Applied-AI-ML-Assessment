@@ -194,9 +194,11 @@ export async function fetchAllMessages(): Promise<Message[]> {
 
 export async function getAllMessages(): Promise<Message[]> {
   if (cache.isPopulated()) {
+    console.log("Returning from cache:", cache.getAll().length, "messages");
     return cache.getAll();
   }
 
+  console.log("Cache empty, fetching messages...");
   return await fetchAllMessages();
 }
 
