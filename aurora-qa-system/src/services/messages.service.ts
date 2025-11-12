@@ -107,6 +107,8 @@ export async function fetchAllMessages(): Promise<Message[]> {
     let hasMore = true;
 
     console.log("Fetching messages from external API...");
+    console.log("API Base URL:", config.api.baseUrl); // Add this
+    console.log("API Timeout:", config.api.timeout); // Add this
 
     while (hasMore) {
       try {
@@ -124,6 +126,11 @@ export async function fetchAllMessages(): Promise<Message[]> {
           hasMore = false;
         }
       } catch (error) {
+        console.log(`\nError during pagination at skip=${skip}`);
+        console.log(
+          `Messages successfully fetched so far: ${allMessages.length}\n`
+        );
+        console.error("DETAILED ERROR:", error); // Add this line
         if (axios.isAxiosError(error)) {
           const status = error.response?.status;
 
